@@ -1,0 +1,23 @@
+# Example consumer workflow for ai-coding-standards.
+#
+# Drop this into a consumer repo at .github/workflows/ai-review.yml after running
+# install.sh from ai-coding-standards.
+
+name: AI Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  models: read
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    uses: ranbou71/ai-coding-standards/.github/workflows/ai-review.yml@main
+    with:
+      standards-path: .ai-standards/standards
+      model: openai/gpt-4o-mini

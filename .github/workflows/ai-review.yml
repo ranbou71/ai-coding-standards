@@ -1,0 +1,131 @@
+# Reusable workflow that runs an AI review of a PR against ai-coding-standards.
+#
+# Consumer repo usage (.github/workflows/ai-review.yml):
+#
+#   name: AI Review
+#   on:
+#     pull_request:
+#       types: [opened, synchronize, reopened, ready_for_review]
+#   permissions:
+#     contents: read
+#     pull-requests: write
+#     models: read
+#   jobs:
+#     review:
+#       uses: CHANGE-ME/ai-coding-standards/.github/workflows/ai-review.yml@main
+#       with:
+#         standards-path: .ai-standards/standards   # default
+#         model: openai/gpt-4o-mini                  # GitHub Models slug
+#
+# This uses GitHub Models (`actions/ai-inference`) so no third-party API key is needed.
+
+name: AI Review (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      standards-path:
+        description: "Path to the standards/ directory (relative to consumer repo root)."
+        type: string
+        required: false
+        default: ".ai-standards/standards"
+      model:
+        description: "GitHub Models model slug."
+        type: string
+        required: false
+        default: "openai/gpt-4o-mini"
+      max-diff-bytes:
+        description: "Cap diff size sent to the model."
+        type: number
+        required: false
+        default: 60000
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      models: read
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Collect standards
+        id: standards
+        shell: bash
+        env:
+          STANDARDS_PATH: ${{ inputs.standards-path }}
+        run: |
+          set -euo pipefail
+          if [[ ! -d "$STANDARDS_PATH" ]]; then
+            echo "::error::standards path '$STANDARDS_PATH' does not exist. Did you install ai-coding-standards as a submodule?"
+            exit 1
+          fi
+          {
+            echo 'rules<<__EOF__'
+            for f in "$STANDARDS_PATH"/*.md; do
+              echo "===== $(basename "$f") ====="
+              cat "$f"
+              echo
+            done
+            echo '__EOF__'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Collect PR diff
+        id: diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MAX_BYTES: ${{ inputs.max-diff-bytes }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE_SHA" || true
+          DIFF=$(git diff --unified=3 "$BASE_SHA" "$HEAD_SHA" | head -c "$MAX_BYTES")
+          {
+            echo 'diff<<__EOF__'
+            printf '%s\n' "$DIFF"
+            echo '__EOF__'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run AI review
+        id: ai
+        uses: actions/ai-inference@v1
+        with:
+          model: ${{ inputs.model }}
+          system-prompt: |
+            You are a strict code reviewer enforcing the rules below. For each
+            violation you find in the diff, output one bullet:
+              - file:line — Rule: "<rule title>" — <one-sentence explanation> — Suggested fix: <concrete fix>
+            If no violations, output exactly: "No standards violations detected."
+            Do not invent rules. Only cite rules listed below. Ignore stylistic
+            preferences not encoded as rules.
+
+            === RULES ===
+            ${{ steps.standards.outputs.rules }}
+          prompt: |
+            Review this diff against the rules.
+
+            === DIFF ===
+            ${{ steps.diff.outputs.diff }}
+
+      - name: Post review comment
+        uses: actions/github-script@v7
+        env:
+          REVIEW_BODY: ${{ steps.ai.outputs.response }}
+        with:
+          script: |
+            const body = [
+              '### AI Standards Review',
+              '',
+              process.env.REVIEW_BODY || '_No output from model._',
+              '',
+              '<sub>Powered by [ai-coding-standards](https://github.com/) + GitHub Models.</sub>'
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
