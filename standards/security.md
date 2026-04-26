@@ -17,10 +17,10 @@
 **Do:** Log only static, generic messages or carefully sanitized values. If logging an error, extract only safe fields (e.g., `error.message` or a status code).
 **Don't:** Log full error objects, environment variables, API responses, request bodies, tokens, or any data that might contain secrets.
 **Why:** Error objects can serialize and expose sensitive information embedded in stack traces, response bodies, or custom properties. Logs are often forwarded to external systems or accessed by multiple teams; once logged, secrets are impossible to fully revoke.
-**Detection:** Any of: `console.error(error)`, `logger.error(error)`, `console.log(process.env)`, `console.error(response)`, or logging variables with names suggesting secrets: `console.log(...bearer_token...)`, `console.log(...password...)`, `console.log(...apiKey...)`, `console.log(...secret...)`, `console.log(...token...)`. If a variable name contains a secret-like word and it appears in a log statement, that's a flag.
-**Example fix (error object):** Replace `console.error('Error:', error)` with `console.error('An error occurred while fetching AuditBoard controls.')` — static message only.
+**Detection:** Any of: `console.error(error)`, `logger.error(error)`, `console.log(process.env)`, `console.error(response)`, `console.log('...', response)`, `logger.error('...', fullObject)`, or logging variables with names suggesting secrets: `console.log(...bearer_token...)`, `console.log(...password...)`, etc. Look for logging of entire objects/responses/requests, especially in error paths — log only status codes, error.message, or static descriptions instead.
+**Example fix (full response):** Replace `console.log('Response:', response)` with `console.error('AuditBoard /controls request failed. Status: ${response.status}, Body: ${errorBody}')` where errorBody is a sanitized text extraction.
 **Example fix (token):** Replace `console.log('Bearer Token:', bearer_token)` with `console.log('Using bearer token for AuditBoard /controls request')` — static message, no token value.
-**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453933
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453951 and https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453933
 
 ## Rule: Don't string-interpolate structured logging objects; pass them as separate arguments
 
