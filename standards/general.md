@@ -46,3 +46,11 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Speculative catch blocks hide errors and make them worse: when the catch fires, you lose the original error details, making debugging harder. If the operation is safe enough for production, trust it. If you're unsure, use a safer alternative or validate inputs up front.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080030571
 **Detection:** `try { … } catch { … data = '[unserializable]'|'[error]'|placeholder }` or similar fallback without a real recovery strategy.
+
+## Rule: Use the framework's centralized cache instead of duplicating with module-level caches
+
+**Do:** Store cached data (tokens, API responses, computed values) in your framework's built-in cache layer with TTL support. All consumers share the same cache and refresh logic.
+**Don't:** Create module-level or service-level cache variables (e.g., `cachedAccessToken`, `cachedResponse`) when a centralized cache mechanism already exists.
+**Why:** Duplicate caching drifts — different modules may refresh at different times or use different TTL logic, causing stale-data bugs. Centralized caching keeps all consumers in sync, reduces maintenance burden, and makes the caching strategy visible and auditable in one place.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3076239350
+**Detection:** Multiple module-level `const` or `let` variables storing cached data (tokens, responses, computed values) when a framework or library cache layer with TTL support is available.
