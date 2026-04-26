@@ -70,3 +70,11 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Implicit error propagation causes reviewers to worry about edge cases (e.g., "Will this error cause a crash? A loop? Unhandled promise rejection?"). Making the path explicit prevents confusion and accelerates code review.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080735542
 **Detection:** Multiple async/sync function calls in sequence where one might throw, and the catch block is 2+ levels up the stack, with no comment explaining the propagation.
+
+## Rule: Update comments when code behavior changes
+
+**Do:** When modifying code logic (adding validation, changing defaults, adding throw statements), update any comments that describe the old behavior. Re-read comments to verify they still match the code.
+**Don't:** Leave comments that describe a "default" or "fallback" when you've added a `throw` statement or changed the logic to require a specific value.
+**Why:** Stale comments are more misleading than no comment. They create false assumptions during code review, maintenance, and debugging. Reviewers and future maintainers trust comments and will be misled if they don't match the code.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453753
+**Detection:** Comment mentions "default X minutes" but code throws if that value is invalid/missing. Or comment says "Priority: A > B" but logic changed to require A.
