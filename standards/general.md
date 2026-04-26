@@ -78,3 +78,12 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Stale comments are more misleading than no comment. They create false assumptions during code review, maintenance, and debugging. Reviewers and future maintainers trust comments and will be misled if they don't match the code.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453753
 **Detection:** Comment mentions "default X minutes" but code throws if that value is invalid/missing. Or comment says "Priority: A > B" but logic changed to require A.
+
+## Rule: Clean up existing resources before overwriting them
+
+**Do:** When a method creates or overwrites resource handles (timers, intervals, connections, listeners), guard against re-entrance by checking if the resource already exists and stopping/clearing it first.
+**Don't:** Blindly overwrite a resource handle without cleaning up the previous one (e.g., `this.interval = setInterval(...)` when `this.interval` might already be active).
+**Why:** Overwriting without cleanup leaks the old resource and causes duplicate operations. If a method can be called multiple times, the second call will create a new timer while the old one keeps running, causing checks to fire twice or preventing proper cleanup.
+**Example fix:** Before `this.interval = setInterval(...)`, add `if (this.interval) this.stop();` or `if (this.interval) clearInterval(this.interval);`
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453802
+**Detection:** Assignment to a resource handle (`this.interval = setInterval`, `this.connection =`, `this.listener =`) in a public method without a preceding guard or cleanup call.
