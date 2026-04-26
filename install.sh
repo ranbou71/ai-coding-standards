@@ -64,6 +64,25 @@ else
   ln -sfn "$STD_TARGET" "$STD_LINK"
 fi
 
+# 5. Add the install paths to .git/info/exclude so they don't appear in
+#    `git status` or get accidentally committed. .git/info/exclude is local
+#    to this clone — it is never pushed — so consumer repos stay clean for
+#    other contributors who haven't installed ai-coding-standards.
+EXCLUDE_FILE=".git/info/exclude"
+EXCLUDE_MARKER="# ai-coding-standards (personal install — do not commit)"
+if [[ -f "$EXCLUDE_FILE" ]] && ! grep -qF "$EXCLUDE_MARKER" "$EXCLUDE_FILE"; then
+  cat >>"$EXCLUDE_FILE" <<EOF
+
+$EXCLUDE_MARKER
+/$SUBMODULE_PATH/
+/.gitmodules
+/$INSTR_LINK
+/$PROMPTS_LINK
+/$STD_LINK
+EOF
+  echo "Added ai-coding-standards paths to $EXCLUDE_FILE"
+fi
+
 cat <<EOF
 
 ai-coding-standards installed.
@@ -72,9 +91,8 @@ ai-coding-standards installed.
   copilot rules:    $INSTR_LINK -> $INSTR_TARGET
   prompts:          $PROMPTS_LINK -> $PROMPTS_TARGET
   standards (root): $STD_LINK -> $STD_TARGET
+  local exclude:    $EXCLUDE_FILE (paths hidden from git status)
 
 To pull the latest rules later:
   git submodule update --remote $SUBMODULE_PATH
-
-Commit the new submodule and symlinks to lock the version.
 EOF

@@ -34,17 +34,21 @@ This will:
 - Symlink `.github/copilot-instructions.md` → submodule.
 - Symlink `.github/prompts/` → submodule (only if it doesn't already exist).
 - Symlink `standards/` at the repo root for easy reading.
+- Add all install paths to `.git/info/exclude` so they stay hidden from
+  `git status` and out of any commit. `.git/info/exclude` is local to the
+  clone and never pushed, so the install is per-developer and invisible to
+  the rest of the team.
 
-Then copy [`examples/consumer-ai-review.yml`](examples/consumer-ai-review.yml) to `.github/workflows/ai-review.yml` in the consumer repo to enable the AI PR review.
-
-Commit the submodule, the symlinks, and the workflow.
+This is a **personal install**: do not commit the submodule, symlinks, or
+`.gitmodules`. Re-run the install on any new clone where you want the rules.
 
 ### Updating to the latest rules
 
 ```bash
 git submodule update --remote .ai-standards
-git add .ai-standards && git commit -m "Bump ai-coding-standards"
 ```
+
+(no commit needed — the submodule reference is excluded locally)
 
 ## Add a new rule
 
