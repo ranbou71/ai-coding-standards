@@ -22,3 +22,19 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Don't:** Add speculative helpers, abstractions, comments, docstrings, or type annotations to code you didn't change.
 **Why:** Scope creep makes diffs hard to review and introduces unrequested behavior.
 **Detection:** Reviewer flags additions outside the stated change.
+
+## Rule: Don't duplicate config normalization in consumers
+
+**Do:** Centralize trimming, defaulting, casting, and parsing in the config layer. Consumers should treat config values as already-normalized.
+**Don't:** Re-`trim()`, re-default, or re-coerce a value that the config layer already handled.
+**Why:** Duplicated normalization drifts over time — the consumer and the config layer end up with different rules for the "same" value, hiding bugs.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3076051573
+**Detection:** A consumer calling `.trim()` / `?? default` / `Number()` / `Boolean()` on a value sourced directly from a config object.
+
+## Rule: Config getters must not throw
+
+**Do:** Load and return raw (or normalized) config values from getters. Validate at the consumer where the value is actually used, and throw there if the value is missing or invalid.
+**Don't:** Throw from a config class getter, property accessor, or module-level constant when a required value is missing.
+**Why:** Throwing from a getter is an unexpected side effect from what callers treat as a passive value lookup. It also forces every importer to handle the error even if they don't need that specific field. Validation belongs at the boundary where the value is consumed.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080004435
+**Detection:** `throw` inside a getter, `get` accessor, or top-level `const` initializer in a config/constants module.
