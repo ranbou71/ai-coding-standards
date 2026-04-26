@@ -38,3 +38,11 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Throwing from a getter is an unexpected side effect from what callers treat as a passive value lookup. It also forces every importer to handle the error even if they don't need that specific field. Validation belongs at the boundary where the value is consumed.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080004435
 **Detection:** `throw` inside a getter, `get` accessor, or top-level `const` initializer in a config/constants module.
+
+## Rule: Don't add speculative try/catch in the middle of code paths
+
+**Do:** Let errors propagate so they're visible and debuggable. Add try/catch only at system boundaries (API handlers, command-line entry points, worker job runners) where you have a real recovery strategy.
+**Don't:** Wrap operations in try/catch "just in case" (e.g., wrapping `JSON.stringify()`, `parseInt()`, or method calls you didn't write) and then convert the error to a placeholder message like `'[unserializable]'`.
+**Why:** Speculative catch blocks hide errors and make them worse: when the catch fires, you lose the original error details, making debugging harder. If the operation is safe enough for production, trust it. If you're unsure, use a safer alternative or validate inputs up front.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080030571
+**Detection:** `try { … } catch { … data = '[unserializable]'|'[error]'|placeholder }` or similar fallback without a real recovery strategy.
