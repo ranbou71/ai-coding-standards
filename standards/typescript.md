@@ -22,3 +22,12 @@
 **Example:** `const interval = setInterval(...); interval.unref();`
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453858
 **Detection:** `setInterval()`, `setTimeout()`, or similar timer creation in a service/monitor class without a corresponding `.unref()` call immediately after.
+
+## Rule: If you fetch a required value, use it in the API call; don't drop it during refactoring
+
+**Do:** When refactoring API calls, audit the headers and parameters to ensure all required fields are still present and being sent. If code fetches a value via `await getCredentials()` or from configuration, it must be included in the request.
+**Don't:** Fetch a required header/parameter value (like `application_id`, auth token, or API key) but then omit it from the actual request, especially when refactoring from one implementation to another.
+**Why:** Silent omission of required headers causes API calls to fail or succeed with partial results, and the bug is invisible because the code "looks correct" at each layer. The value is fetched but not sent — a clear sign of incomplete refactoring.
+**Detection:** Code fetches a value (e.g., `const { bearer_token } = await this.getCredentials()`) but the subsequent fetch/request doesn't include it in headers or query params.
+**Example fix:** If `getCredentials()` returns `{ bearer_token, application_id }`, ensure both are sent in the `Authorization` and `X-Application-Id` headers (or appropriate headers for that API).
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3029453909
