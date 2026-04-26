@@ -62,3 +62,11 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Each try/catch should have a clear reason. When they're flattened, the code is easier to read, debug, and audit. Nested try/catches obscure which failure mode each one is handling and make error traces harder to follow.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3076253621
 **Detection:** Deep nesting (3+ levels) of try/catch blocks, or multiple try/catches in one block without a documented reason tied to a distinct API or security requirement.
+
+## Rule: Document error propagation paths through call chains
+
+**Do:** When an error propagates up through multiple layers (e.g., validation error → handler method → caller → outer catch block), add a comment at the source that traces the propagation path or extract into a named error handler with a clear boundary.
+**Don't:** Rely on the reader to trace through a chain of functions to figure out where errors are caught and what happens to them.
+**Why:** Implicit error propagation causes reviewers to worry about edge cases (e.g., "Will this error cause a crash? A loop? Unhandled promise rejection?"). Making the path explicit prevents confusion and accelerates code review.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080735542
+**Detection:** Multiple async/sync function calls in sequence where one might throw, and the catch block is 2+ levels up the stack, with no comment explaining the propagation.
