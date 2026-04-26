@@ -54,3 +54,11 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Why:** Duplicate caching drifts — different modules may refresh at different times or use different TTL logic, causing stale-data bugs. Centralized caching keeps all consumers in sync, reduces maintenance burden, and makes the caching strategy visible and auditable in one place.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3076239350
 **Detection:** Multiple module-level `const` or `let` variables storing cached data (tokens, responses, computed values) when a framework or library cache layer with TTL support is available.
+
+## Rule: Multiple try/catch blocks are OK if each handles a distinct failure mode; flatten, don't nest them
+
+**Do:** Use separate, sequential try/catch blocks when each one handles a distinct failure mode tied to a specific API or requirement (e.g., `new URL()` throws on invalid input, `.fetch()` throws on network errors, header validation throws). Flatten them; avoid deep nesting.
+**Don't:** Nest multiple try/catch blocks speculatively "just to be safe". If you have multiple legitimate failure modes, sequence them horizontally, not vertically.
+**Why:** Each try/catch should have a clear reason. When they're flattened, the code is easier to read, debug, and audit. Nested try/catches obscure which failure mode each one is handling and make error traces harder to follow.
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3076253621
+**Detection:** Deep nesting (3+ levels) of try/catch blocks, or multiple try/catches in one block without a documented reason tied to a distinct API or security requirement.
