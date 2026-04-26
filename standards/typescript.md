@@ -277,3 +277,132 @@ static get RETRY_LIMIT(): number {
 **Source:** https://github.com/cobank-acb/ama-people-api-lib/pull/1\#discussion_r2747994704
 **Source:** https://github.com/cobank-acb/ama-people-api-lib/pull/1\#discussion_r2748006233
 **Detection:** A shared library's `package.json` lists an ORM (`typeorm`, `prisma`, `sequelize`, `mongoose`, `mikro-orm`) in `dependencies` or `peerDependencies`. Or: any exported type/interface from the library's `src/**/index.ts` barrel transitively imports from one of those packages. Run `tsc --traceResolution` against a library export and grep for the ORM package name.
+
+## Rule: Remove unused imports and dependencies
+
+**Do:** Delete any import statement that isn't referenced in the file. Use ESLint (`unused-imports`, `@typescript-eslint/no-unused-vars`) and IDE Go-to-Usages to verify. Run `npm ls` to find production npm dependencies that are no longer used, and `npm uninstall` them.
+**Don't:** Leave imports that aren't used, "just in case" or "for consistency". Don't ship dependencies only one test suite or legacy code path needs.
+**Why:** Unused imports bloat bundle size (especially in web builds), slow down type checking and language servers, create false search results, and confuse reviewers ("is this used?"). Unused dependencies increase security surface area, complicate upgrades, and waste disk space. Both create more noise than signal in diffs.
+**Detection:** ESLint warnings; `tsc --noUnusedLocals --noUnusedParameters`; `npm ls` marked as extraneous. IDE gray-out / tooltip "unused variable". Copilot detects unused imports in diffs.
+
+## Rule: Always preserve error cause chains when rethrowing
+
+**Do:** When catching and rethrowing errors, attach the original error as the `cause` property:
+
+```typescript
+try {
+  await doSomething();
+} catch (error) {
+  throw new Error('Failed to do something', { cause: error });
+}
+```
+
+**Don't:** Discard the original error or only include a string message:
+
+```typescript
+// BAD: loses the original error context
+catch (error) {
+  throw new Error('Failed to do something');
+}
+```
+
+**Why:** Error cause chains preserve the full stack trace and error context, making debugging drastically easier. A downstream `catch` can inspect `error.cause` to determine the root failure (network timeout, permission denied, invalid syntax, etc.), making recovery and logging smarter. Without cause chains, you're re-inventing the error at each layer, losing crucial details.
+**Detection:** `catch` blocks that `throw new Error(...)` or `throw new AppError(...)` without `{ cause: error }`, especially in error handlers or middleware.
+
+## Rule: Test names must describe behavior, not implementation details
+
+**Do:** Write test names (both `describe` and `it` blocks) that describe the behavior or expected outcome:
+
+```typescript
+describe('postEdits error message formatting', () => {
+  it('includes the Workiva HTTP status code and response data when available', () => {
+    // ...
+  });
+});
+```
+
+**Don't:** Name tests after implementation details (variable names, method names, assertions used):
+
+```typescript
+// BAD: names are about the test's internal steps, not the behavior
+describe('postEdits', () => {
+  it('should throw and check status', () => { /* ... */ });
+  it('catches AxiosError and converts', () => { /* ... */ });
+});
+```
+
+**Why:** Test names are documentation. When a test fails, the name should tell the reader what behavior broke, not what assertion or method was involved. Behavior-focused names speed up bug investigation ("missing status code in error" → look for validation or formatting; "converts axios error" is vague). They also make it clear what you're actually testing instead of how you're testing it.
+**Detection:** Test names that mention method names, variable names, or assertion keywords (`throws`, `returns`, `checks`, `calls`, `converts`). Rename to describe the observable behavior or outcome the test verifies.
+
+## Rule: Class and export names must be unambiguous and not collide
+
+**Do:** Use specific, descriptive names that distinguish the class from similar classes elsewhere in the codebase:
+
+```typescript
+// In src/api/dayforce/controller.ts
+export class DayforceEmployeeController { /* ... */ }
+
+// In src/api/workiva/controller.ts
+export class WorkivaControlController { /* ... */ }
+```
+
+**Don't:** Use generic names that could collide when imported in a file that uses multiple APIs:
+
+```typescript
+// BAD: both exports are named "Controller"
+// This forces imports like: import { Controller as DayforceController } from '...'
+// And makes barrel files ambiguous
+export class Controller { /* ... */ }
+```
+
+**Why:** Colliding export names force consumers to use `as` aliases, pollute the namespace, and make barrel files (`index.ts`) ambiguous — you have to choose which `Controller` to re-export, defeating the purpose of a barrel. Specific names make imports clear and self-documenting; they avoid aliasing gymnastics and surface-level confusion during code review.
+**Detection:** Two or more exports with the same name in different modules; barrel files that can't re-export a symbol without renaming it; imports that require `as` aliases just to disambiguate.
+
+## Rule: Never hardcode invalid or placeholder GUIDs in route paths
+
+**Do:** Either use a valid GUID/UUID for testing, or make the identifier a route parameter:
+
+```typescript
+// Option 1: Valid UUID for testing
+@Get('/employees/550e8400-e29b-41d4-a716-446655440000')
+getEmployee() { /* ... */ }
+
+// Option 2: Parameterized (better)
+@Get('/employees/:employeeId')
+getEmployee(@Param('employeeId') employeeId: string) { /* ... */ }
+```
+
+**Don't:** Hardcode invalid/placeholder GUIDs like `00000000-0000-0000-0000-000000000000` or `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` in route paths.
+
+**Why:** Placeholder GUIDs are often silently treated as valid by databases or APIs, leading to bogus requests and silent failures (requests complete with no employee found, no error thrown). Hardcoding IDs in routes also prevents parameterization and makes testing inflexible. Valid UUIDs or parameterized routes are the right pattern.
+**Detection:** Route decorator containing `00000000-0000-0000-0000-000000000000`, `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, or similar non-UUID placeholder strings. Or: hardcoded IDs in routes that should be parameters.
+
+## Rule: Type event/message payloads accurately—don't over-restrict to single types
+
+**Do:** Use types that reflect the actual data structure of events/messages, which commonly contain mixed types:
+
+```typescript
+interface DayforceEvent {
+  eventId: string;
+  eventType: 'PersonAdded' | 'PersonUpdated' | 'PersonDeleted';
+  payload: Record<string, unknown>;  // Open-ended object
+  metadata: {
+    sentAt: ISO8601DateString;
+    source: string;
+  };
+}
+```
+
+**Don't:** Over-restrict the payload type to a single type when the message can contain different payloads:
+
+```typescript
+// BAD: assumes all events have the same payload shape
+interface DayforceEvent {
+  eventId: string;
+  payload: PersonPayload;  // Only allows PersonPayload, but events can be Person|Account|etc
+  metadata: { sentAt: ISO8601DateString; };
+}
+```
+
+**Why:** Message brokers (SNS, SQS, Event Bridge) and APIs often carry heterogeneous payloads where the actual shape depends on the event type. Over-restricting the type to a single structure (a) breaks when other event types are introduced, (b) forces consumers to downcast/type-ignore to handle real-world messages, and (c) hides the actual contract. Using `Record<string, unknown>` or a discriminated union of types (when you control all possibilities) accurately reflects the data contract and prevents false type safety.
+**Detection:** An event/message interface with a fixed `payload: SomeSpecificType` field that doesn't match the actual broker / API data structure. Or: a service method that takes a single payload type but actually receives multiple types (evidenced by runtime type checks like `if (payload.type === 'X')`).

@@ -29,6 +29,7 @@
 **Don't:** Copy source directories (`COPY src ./src`, `COPY cronjobs ./cronjobs`) before copying `package*.json` and running `npm ci`. Every source change will bust the install layer and re-download the entire dependency tree, slowing local builds and CI.
 **Why:** Docker layer caching is keyed on the inputs to each `COPY`/`RUN`. Copying source before installing dependencies means the install layer is invalidated on every code change — turning a 5-second incremental build into a multi-minute full rebuild and burning CI minutes.
 **Example:**
+
 ```dockerfile
 WORKDIR /usr/src/app
 COPY package.json package-lock.json ./
@@ -37,5 +38,47 @@ COPY src ./src
 COPY cronjobs ./cronjobs
 # ...
 ```
+
 **Source:** https://github.com/cobank-acb/ama-people-event-publisher/pull/21#discussion_r3118712204
-**Detection:** A `COPY src` (or any source directory) that appears in the Dockerfile *before* `COPY package*.json ./` and `RUN npm ci`/`yarn install`/`pnpm install`.
+**Detection:** A `COPY src` (or any source directory) that appears in the Dockerfile _before_ `COPY package*.json ./` and `RUN npm ci`/`yarn install`/`pnpm install`.
+
+## Rule: Code must validate required configuration at startup
+
+**Do:** At service startup, validate all required configuration variables are set. If a variable is required by code, either:
+
+- Define a sensible default in `variables.tf` AND code must not assume it exists without checking, OR
+- Document which environments must override it in their `.tfvars` file, OR
+- Validate and fail fast with a clear error message if required config is missing.
+
+**Don't:** Remove environment-specific `.tfvars` overrides without verifying code gracefully handles the base default. Don't silently use undefined/null values.
+
+**Why:** Prevents runtime failures after deployment (like cron jobs failing immediately). Makes configuration requirements explicit and discoverable.
+
+**Detection:** Service startup errors due to missing environment variables; `.tfvars` removals without corresponding code changes or validation.
+
+## Rule: Config accessors must not silently default required values to empty strings
+
+**Do:** For required configuration (SNS topic ARN, DynamoDB table name, etc.), throw an error if the env var is missing:
+
+```typescript
+static get SNS_TOPIC_ARN(): string {
+  const value = process.env.SNS_TOPIC_ARN;
+  if (!value) {
+    throw new Error('Missing required environment variable: SNS_TOPIC_ARN');
+  }
+  return value;
+}
+```
+
+**Don't:** Silently default to empty string:
+
+```typescript
+// BAD: leads to hard-to-debug AWS errors later
+static get SNS_TOPIC_ARN(): string {
+  return process.env.SNS_TOPIC_ARN || '';
+}
+```
+
+**Why:** Empty strings pass validation but fail at runtime when used (e.g., trying to publish to SNS topic "", scanning DynamoDB table ""). Failing fast during config load makes errors immediately obvious and debuggable.
+
+**Detection:** Config getter methods returning `|| ''` or `?? ''` for required values; AWS SDK errors about empty/invalid resource names.
