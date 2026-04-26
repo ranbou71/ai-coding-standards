@@ -39,6 +39,15 @@ Language-agnostic rules. Apply everywhere unless a topic file says otherwise.
 **Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/67#discussion_r3080004435
 **Detection:** `throw` inside a getter, `get` accessor, or top-level `const` initializer in a config/constants module.
 
+## Rule: Centralize configuration defaults in one authoritative layer
+
+**Do:** Define defaults in a single, explicit location (config class, environment override, or a constants module). Make it clear which source is the source of truth.
+**Don't:** Scatter defaults across multiple locations (variables.ts declares one default, env var is also checked, constructor has another). This creates confusion about which default is "active" in production vs. local dev.
+**Why:** Multiple default sources lead to deployments where the "active" default is unclear. Developers end up unsure whether they're hitting the declared default, the env var, or a constructor parameter. If a bug arises from the wrong value being used, it's hard to trace back.
+**Pattern:** Validation at the boundary + explicit error. Example: `const ttlMs = config.getTtlMinutes() * 60 * 1000; if (!ttlMs || ttlMs <= 0) throw new Error('TTL_MINUTES must be set and > 0 in config');`
+**Source:** https://github.com/cobank-acb/ama-auditboard-workflow/pull/31#discussion_r3030085762
+**Detection:** Multiple config sources for the same value (constants file, `process.env`, constructor parameter) without clear priority or documentation of which takes precedence.
+
 ## Rule: Don't add speculative try/catch in the middle of code paths
 
 **Do:** Let errors propagate so they're visible and debuggable. Add try/catch only at system boundaries (API handlers, command-line entry points, worker job runners) where you have a real recovery strategy.
