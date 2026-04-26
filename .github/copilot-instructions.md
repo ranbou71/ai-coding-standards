@@ -15,6 +15,7 @@ Read these files in full. They are short by design.
 - [General](../standards/general.md)
 - [Git](../standards/git.md)
 - [TypeScript / JavaScript](../standards/typescript.md)
+- [React](../standards/react.md)
 - [Python](../standards/python.md)
 - [Security](../standards/security.md)
 - [Infrastructure / CI / Secrets](../standards/infra.md)
